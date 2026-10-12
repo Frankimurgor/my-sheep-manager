@@ -20,6 +20,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 45
 
+    env:
+      ANDROID_HOME: /usr/local/lib/android/sdk
+      ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -36,20 +40,44 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Setup Android SDK and required components
-        uses: android-actions/setup-android@v3
-        with:
-          api-levels: 35
-          build-tools: '35.0.0'
-          components: |
-            platform-tools
-            cmdline-tools;latest
+      - name: Verify Android SDK is present (preinstalled on runner)
+        run: |
+          echo "ANDROID_HOME=$ANDROID_HOME"
+          ls -la "$ANDROID_HOME" | head -20
+          echo "--- Platform tools ---"
+          ls "$ANDROID_HOME/platform-tools" | head -5
+          echo "--- Platforms ---"
+          ls "$ANDROID_HOME/platforms" || echo "no platforms yet"
+          echo "--- Build tools ---"
+          ls "$ANDROID_HOME/build-tools" || echo "no build-tools yet"
+
+      - name: Install any missing SDK components (fallback, tolerant of failure)
+        run: |
+          SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          if [ ! -x "$SDKMANAGER" ]; then
+            SDKMANAGER="$(find $ANDROID_HOME/cmdline-tools -name sdkmanager -type f 2>/dev/null | head -1)"
+          fi
+          echo "Using sdkmanager at: $SDKMANAGER"
+          if [ -x "$SDKMANAGER" ]; then
+            yes | "$SDKMANAGER" --sdk_root="$ANDROID_HOME" --licenses > /dev/null 2>&1 || true
+            yes | "$SDKMANAGER" --sdk_root="$ANDROID_HOME" "platform-tools" "platforms;android-35" "build-tools;35.0.0" > /dev/null 2>&1 || true
+          else
+            echo "sdkmanager not found — relying on runner preinstalled SDK"
+          fi
+          echo "--- After install ---"
+          ls "$ANDROID_HOME/platforms" || true
+          ls "$ANDROID_HOME/build-tools" || true
 
       - name: Install dependencies
         run: npm install --legacy-peer-deps
 
       - name: Prebuild (generate android/ folder)
         run: npx expo prebuild --platform android --clean --no-install
+
+      - name: Write local.properties with SDK path
+        run: |
+          echo "sdk.dir=$ANDROID_HOME" > android/local.properties
+          cat android/local.properties
 
       - name: Make gradlew executable
         run: chmod +x android/gradlew
