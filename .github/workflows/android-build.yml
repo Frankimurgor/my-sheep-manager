@@ -36,20 +36,14 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Setup Android SDK
+      - name: Setup Android SDK and required components
         uses: android-actions/setup-android@v3
-
-      - name: Install Android SDK components and accept licenses
-        run: |
-          set -e
-          SDKMANAGER="$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager"
-          if [ ! -x "$SDKMANAGER" ]; then
-            SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
-          fi
-          echo "Using sdkmanager at: $SDKMANAGER"
-          yes | "$SDKMANAGER" --licenses > /dev/null || true
-          yes | "$SDKMANAGER" "platform-tools" "platforms;android-35" "build-tools;35.0.0" > /dev/null
-          echo "ANDROID_HOME=$ANDROID_HOME"
+        with:
+          api-levels: 35
+          build-tools: '35.0.0'
+          components: |
+            platform-tools
+            cmdline-tools;latest
 
       - name: Install dependencies
         run: npm install --legacy-peer-deps
@@ -63,17 +57,11 @@ jobs:
       - name: Build APK (release)
         if: ${{ github.event.inputs.profile != 'debug' }}
         working-directory: android
-        env:
-          ANDROID_HOME: ${{ env.ANDROID_HOME }}
-          ANDROID_SDK_ROOT: ${{ env.ANDROID_SDK_ROOT }}
         run: ./gradlew assembleRelease --no-daemon
 
       - name: Build APK (debug)
         if: ${{ github.event.inputs.profile == 'debug' }}
         working-directory: android
-        env:
-          ANDROID_HOME: ${{ env.ANDROID_HOME }}
-          ANDROID_SDK_ROOT: ${{ env.ANDROID_SDK_ROOT }}
         run: ./gradlew assembleDebug --no-daemon
 
       - name: Locate APK
