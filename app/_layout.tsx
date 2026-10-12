@@ -1,56 +1,132 @@
+// app/_layout.tsx
+// Root layout — fonts, providers, top-level Stack, PIN gate.
+
 import { useFonts } from 'expo-font';
-import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from 'expo-router';
+import { Stack, useRouter, useSegments } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
-import { useEffect } from 'react';
-import 'react-native-reanimated';
+import { StatusBar } from 'expo-status-bar';
+import { useEffect, useRef } from 'react';
+import { View } from 'react-native';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 
-import { useColorScheme } from '@/components/useColorScheme';
+import { SheepProvider, useSheep } from '../src/context/SheepContext';
+import { fontAssets, ThemeProvider, useTheme } from '../src/theme';
 
-export {
-  // Catch any errors thrown by the Layout component.
-  ErrorBoundary,
-} from 'expo-router';
+SplashScreen.preventAutoHideAsync().catch(() => {});
 
-export const unstable_settings = {
-  // Ensure that reloading on `/modal` keeps a back button present.
-  initialRouteName: '(tabs)',
-};
-
-// Prevent the splash screen from auto-hiding before asset loading is complete.
-SplashScreen.preventAutoHideAsync();
-
-export default function RootLayout() {
-  const [loaded, error] = useFonts({
-    SpaceMono: require('../assets/fonts/SpaceMono-Regular.ttf'),
-  });
-
-  // Expo Router uses Error Boundaries to catch errors in the navigation tree.
-  useEffect(() => {
-    if (error) throw error;
-  }, [error]);
+function PinGate() {
+  const router = useRouter();
+  const segments = useSegments();
+  const { ready, settings } = useSheep();
+  const firstRun = useRef(true);
 
   useEffect(() => {
-    if (loaded) {
-      SplashScreen.hideAsync();
+    if (!ready) return;
+
+    const onLock = segments[0] === 'lock';
+    const hasPin = !!settings.pinHash;
+
+    if (hasPin && !onLock) {
+      if (firstRun.current) {
+        firstRun.current = false;
+        router.replace('/lock');
+      }
+      return;
     }
-  }, [loaded]);
 
-  if (!loaded) {
-    return null;
-  }
+    if (!hasPin && onLock) {
+      router.replace('/(tabs)');
+    }
 
-  return <RootLayoutNav />;
+    firstRun.current = false;
+  }, [ready, settings.pinHash, segments, router]);
+
+  return null;
 }
 
-function RootLayoutNav() {
-  const colorScheme = useColorScheme();
+function ThemedStack() {
+  const { palette } = useTheme();
 
   return (
-    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-      <Stack>
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        <Stack.Screen name="modal" options={{ presentation: 'modal' }} />
+    <>
+      <StatusBar style={palette.statusBar} />
+      <PinGate />
+      <Stack
+        screenOptions={{
+          headerShown: false,
+          contentStyle: { backgroundColor: palette.background },
+          animation: 'fade',
+        }}
+      >
+        <Stack.Screen name="(tabs)" />
+
+        <Stack.Screen
+          name="sheep/add"
+          options={{ presentation: 'modal', animation: 'slide_from_bottom' }}
+        />
+        <Stack.Screen
+          name="sheep/[id]"
+          options={{ animation: 'slide_from_right' }}
+        />
+        <Stack.Screen
+          name="health/add"
+          options={{ presentation: 'modal', animation: 'slide_from_bottom' }}
+        />
+        <Stack.Screen
+          name="weight/add"
+          options={{ presentation: 'modal', animation: 'slide_from_bottom' }}
+        />
+        <Stack.Screen
+          name="breeding/add"
+          options={{ presentation: 'modal', animation: 'slide_from_bottom' }}
+        />
+        <Stack.Screen
+          name="lambing/add"
+          options={{ presentation: 'modal', animation: 'slide_from_bottom' }}
+        />
+        <Stack.Screen
+          name="task/add"
+          options={{ presentation: 'modal', animation: 'slide_from_bottom' }}
+        />
+        <Stack.Screen
+          name="money/add"
+          options={{ presentation: 'modal', animation: 'slide_from_bottom' }}
+        />
+
+        <Stack.Screen name="breakdown" options={{ animation: 'slide_from_right' }} />
+        <Stack.Screen name="categories" options={{ animation: 'slide_from_right' }} />
+        <Stack.Screen name="tasks" options={{ animation: 'slide_from_right' }} />
+        <Stack.Screen name="settings" options={{ animation: 'slide_from_right' }} />
+        <Stack.Screen name="about" options={{ animation: 'slide_from_right' }} />
+        <Stack.Screen
+          name="lock"
+          options={{ animation: 'fade', gestureEnabled: false }}
+        />
       </Stack>
-    </ThemeProvider>
+    </>
+  );
+}
+
+export default function RootLayout() {
+  const [fontsLoaded, fontError] = useFonts(fontAssets);
+
+  useEffect(() => {
+    if (fontsLoaded || fontError) {
+      SplashScreen.hideAsync().catch(() => {});
+    }
+  }, [fontsLoaded, fontError]);
+
+  if (!fontsLoaded && !fontError) {
+    return <View style={{ flex: 1, backgroundColor: '#2E5D3A' }} />;
+  }
+
+  return (
+    <SafeAreaProvider>
+      <ThemeProvider>
+        <SheepProvider>
+          <ThemedStack />
+        </SheepProvider>
+      </ThemeProvider>
+    </SafeAreaProvider>
   );
 }
